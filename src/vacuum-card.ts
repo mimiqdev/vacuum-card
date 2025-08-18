@@ -219,10 +219,17 @@ export class VacuumCard extends LitElement {
   private renderBattery(): Template {
     const { battery_level, battery_icon } = this.getAttributes(this.entity);
 
+    // Handle undefined/null battery_level which can occur after HA 8.0 updates
+    // Also ensure battery_level is a valid number
+    const batteryDisplay =
+      battery_level != null && !isNaN(Number(battery_level))
+        ? `${Math.round(Number(battery_level))}%`
+        : 'N/A';
+
     return html`
       <div class="tip" @click="${() => this.handleMore()}">
-        <ha-icon icon="${battery_icon}"></ha-icon>
-        <span class="icon-title">${battery_level}%</span>
+        <ha-icon icon="${battery_icon || 'mdi:battery-unknown'}"></ha-icon>
+        <span class="icon-title">${batteryDisplay}</span>
       </div>
     `;
   }
