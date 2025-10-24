@@ -77,6 +77,37 @@ export class VacuumCard extends LitElement {
     return this.hass.states[this.config.map];
   }
 
+  get batteryEntity(): HassEntity | null {
+    if (!this.hass) {
+      return null;
+    }
+
+    // If battery_entity is explicitly configured, use it
+    if (this.config.battery_entity) {
+      return this.hass.states[this.config.battery_entity] ?? null;
+    }
+
+    // Try to auto-detect battery sensor based on vacuum entity name
+    const vacuumEntityId = this.config.entity;
+    const baseName = vacuumEntityId.replace(/^vacuum\./, '');
+
+    const possibleBatteryEntityIds = [
+      `sensor.${baseName}_battery_level`,
+      `sensor.${baseName}_battery`,
+      `sensor.${baseName.replace(/_/g, '-')}_battery_level`,
+      `sensor.${baseName.replace(/_/g, '-')}_battery`,
+    ];
+
+    for (const entityId of possibleBatteryEntityIds) {
+      const entity = this.hass.states[entityId];
+      if (entity) {
+        return entity;
+      }
+    }
+
+    return null;
+  }
+
   public setConfig(config: VacuumCardConfig): void {
     this.config = buildConfig(config);
   }
@@ -180,6 +211,19 @@ export class VacuumCard extends LitElement {
     };
   }
 
+  private getBatteryIcon(batteryLevel: number): string {
+    if (batteryLevel <= 10) return 'mdi:battery-10';
+    if (batteryLevel <= 20) return 'mdi:battery-20';
+    if (batteryLevel <= 30) return 'mdi:battery-30';
+    if (batteryLevel <= 40) return 'mdi:battery-40';
+    if (batteryLevel <= 50) return 'mdi:battery-50';
+    if (batteryLevel <= 60) return 'mdi:battery-60';
+    if (batteryLevel <= 70) return 'mdi:battery-70';
+    if (batteryLevel <= 80) return 'mdi:battery-80';
+    if (batteryLevel <= 90) return 'mdi:battery-90';
+    return 'mdi:battery';
+  }
+
   private renderSource(): Template {
     const { fan_speed: source, fan_speed_list: sources } = this.getAttributes(
       this.entity,
@@ -217,11 +261,37 @@ export class VacuumCard extends LitElement {
   }
 
   private renderBattery(): Template {
-    const { battery_level, battery_icon } = this.getAttributes(this.entity);
+    // Try to get battery level from sensor first (HA v2025.8+)
+    const batteryEntity = this.batteryEntity;
+    let battery_level: number | undefined;
+    let battery_icon: string | undefined;
+
+    if (
+      batteryEntity &&
+      batteryEntity.state !== 'unavailable' &&
+      batteryEntity.state !== 'unknown'
+    ) {
+      // Get battery level from sensor
+      battery_level = parseInt(batteryEntity.state, 10);
+
+      // Get battery icon from sensor attributes or generate based on level
+      battery_icon =
+        batteryEntity.attributes.icon || this.getBatteryIcon(battery_level);
+    } else {
+      // Fallback to old method (vacuum entity attributes)
+      const attributes = this.getAttributes(this.entity);
+      battery_level = attributes.battery_level;
+      battery_icon = attributes.battery_icon;
+    }
+
+    // If we still don't have battery info, don't render
+    if (battery_level === undefined || isNaN(battery_level)) {
+      return nothing;
+    }
 
     return html`
       <div class="tip" @click="${() => this.handleMore()}">
-        <ha-icon icon="${battery_icon}"></ha-icon>
+        <ha-icon icon="${battery_icon || 'mdi:battery'}"></ha-icon>
         <span class="icon-title">${battery_level}%</span>
       </div>
     `;

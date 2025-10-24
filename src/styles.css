@@ -170,6 +170,7 @@ ha-card {
   align-items: center;
   justify-content: center;
   direction: ltr;
+  margin-left: 0;
 }
 
 .status-text {
